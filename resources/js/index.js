@@ -1,4 +1,4 @@
-import * as L from 'leaflet';
+import * as LF from 'leaflet';
 import 'leaflet-fullscreen';
 import "@geoman-io/leaflet-geoman-free";
 
@@ -12,17 +12,19 @@ document.addEventListener('DOMContentLoaded', () => {
             rangeCircle: null,
             drawItems: null,
             rangeSelectField: null,
+            formRestorationHiddenInput:null,
 
             createMap: function (el) {
                 const that = this;
 
-                this.map = L.map(el, config.controls);
+                this.map = LF.map(el, config.controls);
+
 
                 if(config.bounds)
                 {
-                    let southWest = L.latLng(config.bounds.sw.lat, config.bounds.sw.lng);
-                    let northEast = L.latLng(config.bounds.ne.lat, config.bounds.ne.lng);
-                    let bounds = L.latLngBounds(southWest, northEast);
+                    let southWest = LF.latLng(config.bounds.sw.lat, config.bounds.sw.lng);
+                    let northEast = LF.latLng(config.bounds.ne.lat, config.bounds.ne.lng);
+                    let bounds = LF.latLngBounds(southWest, northEast);
                     this.map.setMaxBounds(bounds);
                     this.map.fitBounds(bounds);
                     this.map.on('drag', function() {
@@ -32,7 +34,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.map.on('load', () => {
                     setTimeout(() => this.map.invalidateSize(true), 0);
                     if (config.showMarker) {
-                        this.marker.setLatLng(this.map.getCenter());
+                        if(!config.clickable)
+                        {
+                            this.marker.setLatLng(this.map.getCenter());
+                        }
                     }
                 });
 
@@ -46,8 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         that.setCoordinates(e.latlng);
                     });
                 }
-
-                this.tile = L.tileLayer(config.tilesUrl, {
+                this.tile = LF.tileLayer(config.tilesUrl, {
                     attribution: config.attribution,
                     minZoom: config.minZoom,
                     maxZoom: config.maxZoom,
@@ -58,13 +62,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (config.showMarker) {
                     const markerColor = config.markerColor || "#3b82f6";
-                    const svgIcon = L.divIcon({
+                    const svgIcon = LF.divIcon({
                         html: `<svg xmlns="http://www.w3.org/2000/svg" class="map-icon" fill="${markerColor}" width="36" height="36" viewBox="0 0 24 24"><path d="M12 0c-4.198 0-8 3.403-8 7.602 0 4.198 3.469 9.21 8 16.398 4.531-7.188 8-12.2 8-16.398 0-4.199-3.801-7.602-8-7.602zm0 11c-1.657 0-3-1.343-3-3s1.343-3 3-3 3 1.343 3 3-1.343 3-3 3z"/></svg>`,
                         className: "",
                         iconSize: [36, 36],
                         iconAnchor: [18, 36],
                     });
-                    this.marker = L.marker([0, 0], {
+                    this.marker = LF.marker(this.getCoordinates(), {
                         icon: svgIcon,
                         draggable: false,
                         autoPan: true
@@ -76,13 +80,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
 
-                this.map.on('moveend', () => setTimeout(() => this.updateLocation(), 500));
+                if(!config.clickable)
+                {
+                    this.map.on('moveend', () => setTimeout(() => this.updateLocation(), 500));
+                }
 
                 this.map.on('locationfound', function () {
                     that.map.setZoom(config.controls.zoom);
                 });
 
-                let location = state ?? this.getCoordinates();
+                let location = this.getCoordinates();
                 if (!location.lat && !location.lng) {
                     this.map.locate({
                         setView: true,
@@ -91,7 +98,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         watch: false
                     });
                 } else {
-                    this.map.setView(new L.LatLng(location.lat, location.lng));
+                    this.map.setView(new LF.LatLng(location.lat, location.lng));
                 }
 
                 if (config.showMyLocationButton) {
@@ -103,6 +110,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         this.fetchCurrentLocation();
                     }, config.liveLocation.miliseconds);
                 }
+                this.map.on('zoomend',function(event) {
+                    that.setFormRestorationState(false, that.map.getZoom());
+                });
 
                 // Geoman setup
                 if (config.geoMan.show) {
@@ -121,7 +131,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             deleteLayer: config.geoMan.deleteLayer
                         });
 
-                        this.drawItems = new L.FeatureGroup().addTo(this.map);
+                        this.drawItems = new LF.FeatureGroup().addTo(this.map);
 
                         this.map.on('pm:create', (e) => {
                             if (e.layer && e.layer.pm) {
@@ -147,9 +157,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Load existing GeoJSON if available
                     const existingGeoJson = this.getGeoJson();
                     if (existingGeoJson) {
-                            this.drawItems = L.geoJSON(existingGeoJson, {
+                            this.drawItems = LF.geoJSON(existingGeoJson, {
                                 pointToLayer: (feature, latlng) => {
-                                    return L.circleMarker(latlng, {
+                                    return LF.circleMarker(latlng, {
                                         radius: 15,
                                         color: '#3388ff',
                                         fillColor: '#3388ff',
@@ -206,7 +216,47 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
               }
             },
+            initFormRestoration: function () {
+                this.formRestorationHiddenInput = document.getElementById(config.statePath+'_fmrest');
+                window.addEventListener("pageshow", (event) => {
+                    // called after form restoration
+                    // true if page loaded from session
+                    let restoredState = this.getFormRestorationState();
+                    if(restoredState){
+                        let coords = new LF.LatLng(restoredState.lat, restoredState.lng);
+                        config.zoom = restoredState.zoom;
+                        config.controls.zoom=restoredState.zoom;
+                        this.setCoordinates(coords);
+                    }
+                });
 
+            },
+            setFormRestorationState: function (coords,zoom ) {
+                if(!coords)
+                {
+                    coords=this.getFormRestorationState();
+                    if(!coords) {
+                        coords=this.getCoordinates();
+                    }
+                }
+                if(this.map)
+                {
+                    if(!zoom)
+                    {
+                        coords.zoom=this.map.getZoom();
+                    }
+                    else
+                    {
+                        coords.zoom=zoom;
+                    }
+                }
+                this.formRestorationHiddenInput.value=JSON.stringify(coords);
+            },
+            getFormRestorationState: function () {
+                if(this.formRestorationHiddenInput.value)
+                    return JSON.parse(this.formRestorationHiddenInput.value);
+                return false;
+            },
             updateGeoJson: function() {
                 try {
                     const geoJsonData = this.drawItems.toGeoJSON();
@@ -214,7 +264,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         console.error("GeoJSON data is not an object:", geoJsonData);
                         return;
                     }
-
                     $wire.set(config.statePath, {
                         ...$wire.get(config.statePath),
                         geojson: geoJsonData
@@ -229,21 +278,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 const state = $wire.get(config.statePath) ?? {};
                 return state.geojson;
             },
-
             updateLocation: function() {
-                let coordinates = this.getCoordinates();
-                let currentCenter = this.map.getCenter();
+                let oldCoordinates = this.getCoordinates();
+                let currentCoordinates = this.map.getCenter();
+                if(config.clickable)
+                    currentCoordinates = this.marker.getLatLng();
 
-                if (coordinates.lng !== currentCenter.lng || coordinates.lat !== currentCenter.lat) {
-                    $wire.set(config.statePath, {
-                        ...$wire.get(config.statePath),
-                        lat: currentCenter.lat,
-                        lng: currentCenter.lng
-                    }, false);
-
-                    if (config.liveLocation.send) {
-                        $wire.$refresh();
-                    }
+                if (oldCoordinates.lng !== currentCoordinates.lng || oldCoordinates.lat !== currentCoordinates.lat) {
+                    this.setCoordinates(currentCoordinates);
                 }
             },
 
@@ -260,8 +302,7 @@ document.addEventListener('DOMContentLoaded', () => {
             },
 
             getCoordinates: function () {
-                let location = $wire.get(config.statePath) ?? {};
-
+                let location = $wire.get(config.statePath)  ?? {};
                 const hasValidCoordinates = location.hasOwnProperty('lat') && location.hasOwnProperty('lng') &&
                     location.lat !== null && location.lng !== null;
 
@@ -276,7 +317,7 @@ document.addEventListener('DOMContentLoaded', () => {
             },
 
             setCoordinates: function (coords) {
-
+                this.setFormRestorationState(coords);
                 $wire.set(config.statePath, {
                     ...$wire.get(config.statePath),
                     lat: coords.lat,
@@ -312,7 +353,7 @@ document.addEventListener('DOMContentLoaded', () => {
             fetchCurrentLocation: function () {
                 if ('geolocation' in navigator) {
                     navigator.geolocation.getCurrentPosition(async position => {
-                        const currentPosition = new L.LatLng(position.coords.latitude, position.coords.longitude);
+                        const currentPosition = new LF.LatLng(position.coords.latitude, position.coords.longitude);
                         await this.map.flyTo(currentPosition);
 
                         this.updateLocation();
@@ -335,11 +376,15 @@ document.addEventListener('DOMContentLoaded', () => {
             },
 
             setMarkerRange: function () {
+                if(config.clickable && !this.marker)
+                    return ;
+                if(!this.rangeSelectField)
+                    return ;
                 distance=parseInt(this.rangeSelectField.value || 0 ) ;
                 if (this.rangeCircle) {
                     this.rangeCircle.setLatLng(this.getCoordinates()).setRadius(distance);
                 } else {
-                    this.rangeCircle = L.circle(this.getCoordinates(), {
+                    this.rangeCircle = LF.circle(this.getCoordinates(), {
                         color: 'blue',
                         fillColor: '#f03',
                         fillOpacity: 0.5,
@@ -352,14 +397,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.$wire = $wire;
                 this.config = config;
                 this.state = state;
-                this.rangeSelectField = document.getElementById(config.rangeSelectField || 'data.distance');
+                this.rangeSelectField = document.getElementById(config.rangeSelectField);
+                this.initFormRestoration();
+
                 let that=this
-                this.rangeSelectField.addEventListener('change', function () {that.updateMarker(); });
+                if(this.rangeSelectField){
+                    this.rangeSelectField.addEventListener('change', function () {that.updateMarker(); });
+                }
                 $wire.on('refreshMap', this.refreshMap.bind(this));
             },
 
             updateMarker: function() {
-                if (config.showMarker) {
+                if (config.showMarker && this.marker) {
                     this.marker.setLatLng(this.getCoordinates());
                     this.setMarkerRange();
                     setTimeout(() => this.updateLocation(), 500);
