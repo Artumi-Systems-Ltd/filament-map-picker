@@ -19,7 +19,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 this.map = LF.map(el, config.controls);
 
-
                 if(config.bounds)
                 {
                     let southWest = LF.latLng(config.bounds.sw.lat, config.bounds.sw.lng);
@@ -51,6 +50,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         that.setCoordinates(e.latlng);
                     });
                 }
+
                 this.tile = LF.tileLayer(config.tilesUrl, {
                     attribution: config.attribution,
                     minZoom: config.minZoom,
