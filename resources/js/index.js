@@ -428,6 +428,7 @@ document.addEventListener('livewire:init', () => {
                 }
 
                 if (this.config.liveLocation.send) {
+                    console.log('refresh calling')
                     $wire.refresh();
                 }
                 return coords;
@@ -515,10 +516,12 @@ document.addEventListener('livewire:init', () => {
                     if(typeof newVal == 'string')
                         newVal=JSON.parse(newVal);
                     that.updateMarker(newVal);
+                    that.map.flyTo(newVal);
                 });
 
                 $wire.watch(config.rangeSelectFieldStatePath, newVal => {
                     that.updateMarker();
+
                 });
             },
 
