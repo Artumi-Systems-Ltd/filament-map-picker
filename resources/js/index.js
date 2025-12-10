@@ -428,7 +428,6 @@ document.addEventListener('livewire:init', () => {
                 }
 
                 if (this.config.liveLocation.send) {
-                    console.log('refresh calling')
                     $wire.refresh();
                 }
                 return coords;
